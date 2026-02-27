@@ -15,14 +15,14 @@ import java.util.Map;
 @Mixin(AttributeMap.class)
 public class AttributeMapMixin implements DtmResetable {
 
-    @Final private AttributeSupplier fallback;
+    @Shadow @Final private AttributeSupplier supplier;
 
     @Shadow @Final private Map<Holder<Attribute>, AttributeInstance> attributes;
 
     @Override
     public void dtm$reset() {
         for (var x : this.attributes.entrySet()) {
-            x.getValue().setBaseValue(this.fallback.getBaseValue(x.getKey()));
+            x.getValue().setBaseValue(this.supplier.getBaseValue(x.getKey()));
         }
     }
 }
