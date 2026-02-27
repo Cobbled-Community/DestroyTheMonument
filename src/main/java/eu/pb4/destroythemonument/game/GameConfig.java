@@ -3,7 +3,7 @@ package eu.pb4.destroythemonument.game;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 import eu.pb4.destroythemonument.game.map.MapConfig;
 import xyz.nucleoid.plasmid.api.game.common.config.WaitingLobbyConfig;
 import xyz.nucleoid.plasmid.api.game.common.team.GameTeamList;

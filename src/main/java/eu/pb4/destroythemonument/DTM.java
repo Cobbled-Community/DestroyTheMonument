@@ -5,20 +5,17 @@ import eu.pb4.destroythemonument.entities.DtmEntities;
 import eu.pb4.destroythemonument.game.logic.BaseGameLogic;
 import eu.pb4.destroythemonument.game.playerclass.ClassRegistry;
 import eu.pb4.destroythemonument.items.DtmItems;
-import eu.pb4.destroythemonument.other.DtmUtil;
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.objects.ObjectOpenCustomHashSet;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.minecraft.block.Block;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.tag.TagKey;
-import net.minecraft.util.Util;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.TagKey;
 import xyz.nucleoid.plasmid.api.game.GameAttachment;
-import xyz.nucleoid.plasmid.api.game.GameSpace;
 import xyz.nucleoid.plasmid.api.game.GameType;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import eu.pb4.destroythemonument.game.GameConfig;
@@ -26,7 +23,6 @@ import eu.pb4.destroythemonument.game.WaitingLobby;
 
 import java.util.Random;
 import java.util.Set;
-import java.util.WeakHashMap;
 
 import static eu.pb4.destroythemonument.other.DtmUtil.id;
 
@@ -34,8 +30,8 @@ public class DTM implements ModInitializer {
     public static final String ID = "destroy_the_monument";
     public static final Logger LOGGER = LogManager.getLogger(ID);
     public static final Random RANDOM = new Random();
-    public static final TagKey<Block> SPAWNABLE_TAG = TagKey.of(RegistryKeys.BLOCK, id("spawnable"));
-    public static final TagKey<Block> BUILDING_BLOCKS = TagKey.of(RegistryKeys.BLOCK, id("building_blocks"));
+    public static final TagKey<Block> SPAWNABLE_TAG = TagKey.create(Registries.BLOCK, id("spawnable"));
+    public static final TagKey<Block> BUILDING_BLOCKS = TagKey.create(Registries.BLOCK, id("building_blocks"));
 
     private static final Hash.Strategy<Object> IDENTITY_HASH = new Hash.Strategy<Object>() {
         @Override
@@ -54,7 +50,7 @@ public class DTM implements ModInitializer {
 
 
     public static final GameType<GameConfig> TYPE = GameType.register(
-            Identifier.of(ID, ID),
+            Identifier.fromNamespaceAndPath(ID, ID),
             GameConfig.CODEC,
             WaitingLobby::open
     );
@@ -68,12 +64,12 @@ public class DTM implements ModInitializer {
         DtmEntities.register();
         ClassRegistry.register();
         ServerLifecycleEvents.SERVER_STARTING.register((s) -> {
-            Registries.BLOCK.forEach(x -> {
-                if (Registries.BLOCK.getId(x).getPath().endsWith("_concrete")) {
+            BuiltInRegistries.BLOCK.forEach(x -> {
+                if (BuiltInRegistries.BLOCK.getKey(x).getPath().endsWith("_concrete")) {
                     CONCRETE.add(x);
-                } else if (Registries.BLOCK.getId(x).getPath().endsWith("_stained_glass")) {
+                } else if (BuiltInRegistries.BLOCK.getKey(x).getPath().endsWith("_stained_glass")) {
                     STAINED_GLASS.add(x);
-                } else if (Registries.BLOCK.getId(x).getPath().endsWith("_stained_glass_panes")) {
+                } else if (BuiltInRegistries.BLOCK.getKey(x).getPath().endsWith("_stained_glass_panes")) {
                     STAINED_GLASS_PANES.add(x);
                 }
             });

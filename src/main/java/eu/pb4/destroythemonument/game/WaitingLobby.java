@@ -16,13 +16,13 @@ import eu.pb4.destroythemonument.other.DtmUtil;
 import eu.pb4.destroythemonument.ui.ClassSelectorUI;
 import eu.pb4.sgui.api.elements.GuiElement;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.rule.GameRules;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.gamerules.GameRules;
 import xyz.nucleoid.fantasy.RuntimeWorldConfig;
 import xyz.nucleoid.plasmid.api.game.*;
 import xyz.nucleoid.plasmid.api.game.common.GameWaitingLobby;
@@ -58,7 +58,7 @@ public class WaitingLobby {
         this.config = config;
         this.spawnLogic = new SpawnLogic(gameSpace, map, null, null);
         this.teams = new Teams(map, config);
-        this.defaultKit = ClassRegistry.get(this.config.kits().get(0));
+        this.defaultKit = ClassRegistry.get(this.config.kits().getFirst());
 
         this.teamSelection = teamSelection;
         this.debug = config.gamemode().equals("debug");
@@ -79,7 +79,7 @@ public class WaitingLobby {
                 }
             }
         } catch (Exception e) {
-            throw new GameOpenException(Text.literal("Map couldn't load! @Patbox pls fix"), e);
+            throw new GameOpenException(Component.literal("Map couldn't load! @Patbox pls fix"), e);
         }
 
         map.validate();
@@ -108,7 +108,7 @@ public class WaitingLobby {
         });
     }
 
-    private EventResult onPlayerDamage(ServerPlayerEntity player, DamageSource damageSource, float v) {
+    private EventResult onPlayerDamage(ServerPlayer player, DamageSource damageSource, float v) {
         if (player.getY() < this.map.mapBounds.min().getY()) {
             this.spawnLogic.spawnPlayer(player);
         }
@@ -116,20 +116,20 @@ public class WaitingLobby {
         return EventResult.DENY;
     }
 
-    private ActionResult onUseItem(ServerPlayerEntity player, Hand hand) {
+    private InteractionResult onUseItem(ServerPlayer player, InteractionHand hand) {
         PlayerData playerData = this.participants.get(PlayerRef.of(player));
 
-        if (playerData != null && player.getMainHandStack().getItem() == DtmItems.CLASS_SELECTOR) {
+        if (playerData != null && player.getMainHandItem().getItem() == DtmItems.CLASS_SELECTOR) {
             ClassSelectorUI.openSelector(player, playerData, this.config.kits());
         }
 
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
 
-    private void buildUiLayout(WaitingLobbyUiLayout layout, ServerPlayerEntity player) {
+    private void buildUiLayout(WaitingLobbyUiLayout layout, ServerPlayer player) {
         if (this.gameSpace.getPlayers().participants().contains(player)) {
-            layout.addTrailing(() -> new GuiElement(DtmItems.CLASS_SELECTOR.getDefaultStack(), (index, type, action) -> {
+            layout.addTrailing(() -> new GuiElement(DtmItems.CLASS_SELECTOR.getDefaultInstance(), (index, type, action) -> {
                 if (type.isRight) {
                     ClassSelectorUI.openSelector(player, this.participants.get(player), this.config.kits());
                 }
@@ -138,7 +138,7 @@ public class WaitingLobby {
     }
 
     private GameResult requestStart() {
-        Multimap<GameTeamKey, ServerPlayerEntity> playerTeams = HashMultimap.create();
+        Multimap<GameTeamKey, ServerPlayer> playerTeams = HashMultimap.create();
         this.teamSelection.allocate(this.gameSpace.getPlayers().participants(), playerTeams::put);
         switch (this.config.gamemode()) {
             case "standard":
@@ -157,7 +157,7 @@ public class WaitingLobby {
         return GameResult.ok();
     }
 
-    private void addPlayer(ServerPlayerEntity player) {
+    private void addPlayer(ServerPlayer player) {
         this.participants.put(PlayerRef.of(player), new PlayerData(this.defaultKit));
         this.spawnPlayer(player);
 
@@ -166,18 +166,18 @@ public class WaitingLobby {
         }
     }
 
-    private void removePlayer(ServerPlayerEntity player) {
+    private void removePlayer(ServerPlayer player) {
         this.participants.remove(PlayerRef.of(player));
     }
 
-    private EventResult onPlayerDeath(ServerPlayerEntity player, DamageSource source) {
+    private EventResult onPlayerDeath(ServerPlayer player, DamageSource source) {
         player.setHealth(20.0f);
         this.spawnPlayer(player);
         return EventResult.DENY;
     }
 
-    private void spawnPlayer(ServerPlayerEntity player) {
-        this.spawnLogic.resetPlayer(player, GameMode.ADVENTURE, false);
+    private void spawnPlayer(ServerPlayer player) {
+        this.spawnLogic.resetPlayer(player, GameType.ADVENTURE, false);
         this.spawnLogic.spawnPlayer(player);
         //player.getInventory().setStack(8, new ItemStack(DtmItems.CLASS_SELECTOR));
     }

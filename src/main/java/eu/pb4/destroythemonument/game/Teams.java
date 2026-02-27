@@ -4,8 +4,8 @@ import eu.pb4.destroythemonument.game.data.TeamData;
 import eu.pb4.destroythemonument.game.map.GameMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import net.minecraft.scoreboard.AbstractTeam;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.world.scores.Team;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import xyz.nucleoid.plasmid.api.game.GameActivity;
 import xyz.nucleoid.plasmid.api.game.common.team.GameTeamConfig;
@@ -56,17 +56,17 @@ public class Teams implements Iterable<TeamData> {
 
         this.teamConfigs.put(team, GameTeamConfig.builder(teamConfig)
                 .setFriendlyFire(true)
-                .setCollision(AbstractTeam.CollisionRule.PUSH_OWN_TEAM).build());
+                .setCollision(Team.CollisionRule.PUSH_OWN_TEAM).build());
         TeamData teamData = new TeamData(team, this);
         this.map.setTeamRegions(team, teamData, config);
         this.teamData.put(team, teamData);
     }
 
-    public void addPlayer(ServerPlayerEntity player, GameTeamKey team) {
+    public void addPlayer(ServerPlayer player, GameTeamKey team) {
         this.manager.addPlayerTo(player, team);
     }
 
-    public void removePlayer(ServerPlayerEntity player) {
+    public void removePlayer(ServerPlayer player) {
         this.manager.removePlayer(player);
     }
 

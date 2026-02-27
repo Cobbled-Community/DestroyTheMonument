@@ -1,40 +1,35 @@
 package eu.pb4.destroythemonument.items;
 
 import eu.pb4.polymer.core.api.item.PolymerItem;
-import net.minecraft.block.*;
-import net.minecraft.component.EnchantmentEffectComponentTypes;
-import net.minecraft.component.type.AttributeModifierSlot;
-import net.minecraft.component.type.AttributeModifiersComponent;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.MovementType;
-import net.minecraft.entity.attribute.EntityAttributeModifier;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.data.TrackedData;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.PersistentProjectileEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.entity.projectile.SmallFireballEntity;
-import net.minecraft.entity.projectile.TridentEntity;
-import net.minecraft.item.*;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.stat.Stats;
-import net.minecraft.state.property.Properties;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.*;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.world.World;
-import net.minecraft.world.event.GameEvent;
+import net.minecraft.util.Mth;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.TridentItem;
+import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
+import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.arrow.ThrownTrident;
+import net.minecraft.core.Holder;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.stats.Stats;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import org.spongepowered.asm.mixin.Unique;
 import xyz.nucleoid.packettweaker.PacketContext;
 
 import java.util.HashMap;
@@ -43,13 +38,13 @@ import java.util.UUID;
 
 public class DtmTridentItem extends TridentItem implements PolymerItem {
 
-    public DtmTridentItem(Item.Settings settings) {
-        super(settings.attributeModifiers(AttributeModifiersComponent.builder().add(EntityAttributes.ATTACK_DAMAGE, new EntityAttributeModifier(BASE_ATTACK_DAMAGE_MODIFIER_ID, (double)8.0F, EntityAttributeModifier.Operation.ADD_VALUE), AttributeModifierSlot.MAINHAND).add(EntityAttributes.ATTACK_SPEED, new EntityAttributeModifier(BASE_ATTACK_SPEED_MODIFIER_ID, (double)-2.9F, EntityAttributeModifier.Operation.ADD_VALUE), AttributeModifierSlot.MAINHAND).build()));
+    public DtmTridentItem(Item.Properties settings) {
+        super(settings.attributes(ItemAttributeModifiers.builder().add(Attributes.ATTACK_DAMAGE, new AttributeModifier(BASE_ATTACK_DAMAGE_ID, (double)8.0F, AttributeModifier.Operation.ADD_VALUE), EquipmentSlotGroup.MAINHAND).add(Attributes.ATTACK_SPEED, new AttributeModifier(BASE_ATTACK_SPEED_ID, (double)-2.9F, AttributeModifier.Operation.ADD_VALUE), EquipmentSlotGroup.MAINHAND).build()));
     }
 
     @Override
-    public Text getName(ItemStack stack) {
-        return Text.translatable("item.minecraft.trident");
+    public Component getName(ItemStack stack) {
+        return Component.translatable("item.minecraft.trident");
     }
 
     @Override
@@ -59,65 +54,65 @@ public class DtmTridentItem extends TridentItem implements PolymerItem {
 
     @Override
     public @Nullable Identifier getPolymerItemModel(ItemStack stack, PacketContext context) {
-        return PolymerItem.super.getPolymerItemModel(Items.TRIDENT.getDefaultStack(), context);
+        return PolymerItem.super.getPolymerItemModel(Items.TRIDENT.getDefaultInstance(), context);
     }
 
-    private static final Map<PlayerEntity, UUID> lastThrownTridentUUID = new HashMap<>();
+    private static final Map<Player, UUID> lastThrownTridentUUID = new HashMap<>();
 
     @Override
-    public boolean onStoppedUsing(ItemStack stack, World world, LivingEntity user, int remainingUseTicks) {
-        ItemStack stackInHand = user.getStackInHand(user.getActiveHand());
-        if (user instanceof PlayerEntity playerEntity) {
-            int i = this.getMaxUseTime(stack, user) - remainingUseTicks;
+    public boolean releaseUsing(ItemStack stack, Level world, LivingEntity user, int remainingUseTicks) {
+        ItemStack stackInHand = user.getItemInHand(user.getUsedItemHand());
+        if (user instanceof Player playerEntity) {
+            int i = this.getUseDuration(stack, user) - remainingUseTicks;
             if (i < 10) {
                 return false;
             } else {
                 float f = EnchantmentHelper.getTridentSpinAttackStrength(stack, playerEntity);
-                if (f > 0.0F && !playerEntity.isTouchingWaterOrRain()) {
+                if (f > 0.0F && !playerEntity.isInWaterOrRain()) {
                     return false;
-                } else if (stack.willBreakNextUse()) {
+                } else if (stack.nextDamageWillBreak()) {
                     return false;
                 } else {
-                    RegistryEntry<SoundEvent> registryEntry = (RegistryEntry)EnchantmentHelper.getEffect(stack, EnchantmentEffectComponentTypes.TRIDENT_SOUND).orElse(SoundEvents.ITEM_TRIDENT_THROW);
-                    playerEntity.incrementStat(Stats.USED.getOrCreateStat(this));
-                    if (world instanceof ServerWorld) {
-                        ServerWorld serverWorld = (ServerWorld) world;
-                        stack.damage(1, playerEntity);
+                    Holder<SoundEvent> registryEntry = (Holder) EnchantmentHelper.pickHighestLevel(stack, EnchantmentEffectComponents.TRIDENT_SOUND).orElse(SoundEvents.TRIDENT_THROW);
+                    playerEntity.awardStat(Stats.ITEM_USED.get(this));
+                    if (world instanceof ServerLevel) {
+                        ServerLevel serverWorld = (ServerLevel) world;
+                        stack.hurtWithoutBreaking(1, playerEntity);
 
                         if (f == 0.0F) {
                             removeLastThrownTrident(playerEntity, serverWorld);
-                            TridentEntity tridentEntity = (TridentEntity) ProjectileEntity.spawnWithVelocity(TridentEntity::new, serverWorld, stack, playerEntity, 0.0F, 2.5F, 1.0F);
-                            if (playerEntity.isInCreativeMode()) {
-                                tridentEntity.pickupType = PersistentProjectileEntity.PickupPermission.CREATIVE_ONLY;
+                            ThrownTrident tridentEntity = (ThrownTrident) Projectile.spawnProjectileFromRotation(ThrownTrident::new, serverWorld, stack, playerEntity, 0.0F, 2.5F, 1.0F);
+                            if (playerEntity.hasInfiniteMaterials()) {
+                                tridentEntity.pickup = AbstractArrow.Pickup.CREATIVE_ONLY;
                             } else {
-                                ((PlayerEntity) user).getItemCooldownManager().set(stackInHand, 60);
+                                ((Player) user).getCooldowns().addCooldown(stackInHand, 60);
                             }
 
-                            lastThrownTridentUUID.put(playerEntity, tridentEntity.getUuid());
+                            lastThrownTridentUUID.put(playerEntity, tridentEntity.getUUID());
 
-                            world.playSoundFromEntity((PlayerEntity) null, tridentEntity, (SoundEvent) registryEntry.value(), SoundCategory.PLAYERS, 1.0F, 1.0F);
+                            world.playSound((Player) null, tridentEntity, (SoundEvent) registryEntry.value(), SoundSource.PLAYERS, 1.0F, 1.0F);
                             return true;
                         }
                     }
 
                     if (f > 0.0F) {
-                        float g = playerEntity.getYaw();
-                        float h = playerEntity.getPitch();
-                        float j = -MathHelper.sin(g * ((float)Math.PI / 180F)) * MathHelper.cos(h * ((float)Math.PI / 180F));
-                        float k = -MathHelper.sin(h * ((float)Math.PI / 180F));
-                        float l = MathHelper.cos(g * ((float)Math.PI / 180F)) * MathHelper.cos(h * ((float)Math.PI / 180F));
-                        float m = MathHelper.sqrt(j * j + k * k + l * l);
+                        float g = playerEntity.getYRot();
+                        float h = playerEntity.getXRot();
+                        float j = -Mth.sin(g * ((float)Math.PI / 180F)) * Mth.cos(h * ((float)Math.PI / 180F));
+                        float k = -Mth.sin(h * ((float)Math.PI / 180F));
+                        float l = Mth.cos(g * ((float)Math.PI / 180F)) * Mth.cos(h * ((float)Math.PI / 180F));
+                        float m = Mth.sqrt(j * j + k * k + l * l);
                         j *= f / m;
                         k *= f / m;
                         l *= f / m;
-                        playerEntity.addVelocity((double)j, (double)k, (double)l);
-                        playerEntity.useRiptide(20, 8.0F, stack);
-                        if (playerEntity.isOnGround()) {
+                        playerEntity.push((double)j, (double)k, (double)l);
+                        playerEntity.startAutoSpinAttack(20, 8.0F, stack);
+                        if (playerEntity.onGround()) {
                             float n = 1.1999999F;
-                            playerEntity.move(MovementType.SELF, new Vec3d((double)0.0F, (double)1.1999999F, (double)0.0F));
+                            playerEntity.move(MoverType.SELF, new Vec3((double)0.0F, (double)1.1999999F, (double)0.0F));
                         }
 
-                        world.playSoundFromEntity((PlayerEntity)null, playerEntity, (SoundEvent)registryEntry.value(), SoundCategory.PLAYERS, 1.0F, 1.0F);
+                        world.playSound((Player)null, playerEntity, (SoundEvent)registryEntry.value(), SoundSource.PLAYERS, 1.0F, 1.0F);
                         return true;
                     } else {
                         return false;
@@ -130,12 +125,12 @@ public class DtmTridentItem extends TridentItem implements PolymerItem {
     }
 
 
-    private void removeLastThrownTrident(PlayerEntity playerEntity, ServerWorld serverWorld) {
+    private void removeLastThrownTrident(Player playerEntity, ServerLevel serverWorld) {
         UUID lastTridentUuid = lastThrownTridentUUID.get(playerEntity);
 
         if (lastTridentUuid != null) {
             Entity entity = serverWorld.getEntity(lastTridentUuid);
-            if (entity instanceof TridentEntity tridentEntity && tridentEntity.getOwner() == playerEntity) {
+            if (entity instanceof ThrownTrident tridentEntity && tridentEntity.getOwner() == playerEntity) {
                 tridentEntity.discard();
             }
         }

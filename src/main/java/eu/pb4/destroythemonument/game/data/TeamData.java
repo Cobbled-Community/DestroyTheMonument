@@ -4,15 +4,11 @@ import eu.pb4.destroythemonument.DTM;
 import eu.pb4.destroythemonument.game.GameConfig;
 import eu.pb4.destroythemonument.game.Teams;
 import eu.pb4.destroythemonument.game.map.GameMap;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.text.Text;
-import net.minecraft.util.Util;
-import net.minecraft.util.math.BlockPos;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
 import xyz.nucleoid.map_templates.BlockBounds;
 import xyz.nucleoid.map_templates.TemplateRegion;
 import xyz.nucleoid.plasmid.api.game.GameOpenException;
-import xyz.nucleoid.plasmid.api.game.common.team.GameTeam;
 import xyz.nucleoid.plasmid.api.game.common.team.GameTeamConfig;
 import xyz.nucleoid.plasmid.api.game.common.team.GameTeamKey;
 
@@ -50,7 +46,7 @@ public class TeamData {
         this.spawnYaw = spawnYaw;
 
         if (this.spawn.isEmpty()) {
-            throw new GameOpenException(Text.literal("No valid spawns for " + this.team.id()));
+            throw new GameOpenException(Component.literal("No valid spawns for " + this.team.id()));
         }
 
         int id = 0;

@@ -21,40 +21,58 @@ import eu.pb4.polymer.core.api.entity.PolymerEntityUtils;
 import eu.pb4.sidebars.api.Sidebar;
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.*;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.data.DataTracker;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.PlayerAbilities;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.PersistentProjectileEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.entity.projectile.WindChargeEntity;
-import net.minecraft.item.ArrowItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.item.Items;
-import net.minecraft.network.listener.ClientPlayPacketListener;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.s2c.play.*;
-import net.minecraft.particle.DustParticleEffect;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.protocol.game.ClientboundBundlePacket;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
+import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityEvent;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Abilities;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge;
+import net.minecraft.world.item.ArrowItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.item.Items;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.*;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ColorHelper;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.explosion.Explosion;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.ARGB;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Explosion;
 import xyz.nucleoid.plasmid.api.game.GameActivity;
 import xyz.nucleoid.plasmid.api.game.GameCloseReason;
 import xyz.nucleoid.plasmid.api.game.GameSpace;
@@ -117,7 +135,7 @@ public abstract class BaseGameLogic {
         this.spawnLogic = new SpawnLogic(gameSpace, map, participants, teams);
         this.teams = teams;
         this.statistics = gameSpace.getStatistics().bundle(DTM.ID);
-        this.defaultKit = ClassRegistry.get(this.config.kits().get(0));
+        this.defaultKit = ClassRegistry.get(this.config.kits().getFirst());
         this.mapRenderer = new MapRenderer(this);
         for (Identifier id : this.config.kits()) {
             PlayerClass kit = ClassRegistry.get(id);
@@ -129,7 +147,7 @@ public abstract class BaseGameLogic {
         this.buildSidebar();
         this.globalSidebar.show();
 
-        for (ServerPlayerEntity player : this.gameSpace.getPlayers()) {
+        for (ServerPlayer player : this.gameSpace.getPlayers()) {
             PlayerData data = this.participants.get(PlayerRef.of(player));
 
             if (data != null) {
@@ -143,7 +161,7 @@ public abstract class BaseGameLogic {
         map.onGameStart(this);
     }
 
-    public void setupGame(GameActivity game, GameMap map, GameConfig config, Multimap<GameTeamKey, ServerPlayerEntity> playerTeams) {
+    public void setupGame(GameActivity game, GameMap map, GameConfig config, Multimap<GameTeamKey, ServerPlayer> playerTeams) {
         PlayerLimiter.addTo(game, config.players().playerConfig());
         game.setRule(GameRuleType.CRAFTING, EventResult.DENY);
         game.setRule(GameRuleType.PORTALS, EventResult.DENY);
@@ -184,7 +202,7 @@ public abstract class BaseGameLogic {
         this.teams.applyTo(game);
 
         for (var team : playerTeams.keySet()) {
-            for (ServerPlayerEntity player : playerTeams.get(team)) {
+            for (ServerPlayer player : playerTeams.get(team)) {
                 this.participants.get(PlayerRef.of(player)).teamData = this.teams.getData(team);
                 this.teams.addPlayer(player, team);
             }
@@ -193,44 +211,44 @@ public abstract class BaseGameLogic {
         TeamChat.addTo(game, this.teams.getManager());
     }
 
-    private EventResult onProjectileHit(ProjectileEntity projectileEntity, BlockHitResult blockHitResult) {
-        if (projectileEntity instanceof PersistentProjectileEntity persistentProjectile) {
-            persistentProjectile.pickupType = PersistentProjectileEntity.PickupPermission.DISALLOWED;
+    private EventResult onProjectileHit(Projectile projectileEntity, BlockHitResult blockHitResult) {
+        if (projectileEntity instanceof AbstractArrow persistentProjectile) {
+            persistentProjectile.pickup = AbstractArrow.Pickup.DISALLOWED;
         }
         return EventResult.PASS;
     }
 
-    protected EventResult onBlockPunch(ServerPlayerEntity player, Direction direction, BlockPos blockPos) {
+    protected EventResult onBlockPunch(ServerPlayer player, Direction direction, BlockPos blockPos) {
         return EventResult.PASS;
     }
 
-    protected EventResult onPlayerDropItem(PlayerEntity player, int i, ItemStack stack) {
+    protected EventResult onPlayerDropItem(Player player, int i, ItemStack stack) {
         if (this.participants.get(PlayerRef.of(player)) != null && stack != null) {
             if (stack.getItem() == DtmItems.MULTI_BLOCK) {
-                if (player.isSneaking()) {
+                if (player.isShiftKeyDown()) {
                     var playerData = this.participants.get(PlayerRef.of(player));
                     var list = new ArrayList<Block>();
-                    Registries.BLOCK.getOrThrow(DTM.BUILDING_BLOCKS).forEach(x -> list.add(x.value()));
+                    BuiltInRegistries.BLOCK.getOrThrow(DTM.BUILDING_BLOCKS).forEach(x -> list.add(x.value()));
                     playerData.selectedBlock = list.get((list.size() + list.indexOf(playerData.selectedBlock) + 1) % list.size());
                 } else {
-                    BlockSelectorUI.openSelector((ServerPlayerEntity) player, this);
+                    BlockSelectorUI.openSelector((ServerPlayer) player, this);
                 }
             } else if (stack.getItem() == DtmItems.CLASS_SELECTOR) {
-                ClassSelectorUI.openSelector((ServerPlayerEntity) player, this);
+                ClassSelectorUI.openSelector((ServerPlayer) player, this);
             }
         }
 
         return EventResult.DENY;
     }
 
-    protected EventResult onArrowShoot(ServerPlayerEntity player, ItemStack itemStack, ArrowItem arrowItem, int i, PersistentProjectileEntity projectile) {
-        projectile.pickupType = PersistentProjectileEntity.PickupPermission.DISALLOWED;
+    protected EventResult onArrowShoot(ServerPlayer player, ItemStack itemStack, ArrowItem arrowItem, int i, AbstractArrow projectile) {
+        projectile.pickup = AbstractArrow.Pickup.DISALLOWED;
         return EventResult.PASS;
     }
 
     protected EventResult onExplosion(Explosion explosion, List<BlockPos> destroyedBlocks) {
-        var causingEntity = explosion.getEntity();
-        if (causingEntity instanceof WindChargeEntity) {
+        var causingEntity = explosion.getDirectSourceEntity();
+        if (causingEntity instanceof WindCharge) {
             return EventResult.PASS;
         }
         for (BlockPos blockPos : destroyedBlocks) {
@@ -239,23 +257,23 @@ public abstract class BaseGameLogic {
                 if (state.isAir()) {
                     continue;
                 }
-                this.gameMap.world.setBlockState(blockPos, Blocks.AIR.getDefaultState());
+                this.gameMap.world.setBlockAndUpdate(blockPos, Blocks.AIR.defaultBlockState());
 
-                var owner = explosion.getEntity() instanceof DtmTntEntity dtmTnt ? dtmTnt.causingEntity : null;
+                var owner = explosion.getDirectSourceEntity() instanceof DtmTntEntity dtmTnt ? dtmTnt.causingEntity : null;
 
-                if (owner instanceof ServerPlayerEntity player) {
+                if (owner instanceof ServerPlayer player) {
                     var data = this.participants.get(PlayerRef.of(player));
 
                     if (data != null) {
-                        if (state.isIn(DTM.BUILDING_BLOCKS)) {
-                            player.giveItemStack(new ItemStack(DtmItems.MULTI_BLOCK));
+                        if (state.is(DTM.BUILDING_BLOCKS)) {
+                            player.addItem(new ItemStack(DtmItems.MULTI_BLOCK));
                             data.brokenPlankBlocks += 1;
                         } else {
-                            if (state.calcBlockBreakingDelta(player, player.getEntityWorld(), blockPos) < 1) {
+                            if (state.getDestroyProgress(player, player.level(), blockPos) < 1) {
                                 data.brokenNonPlankBlocks += 1;
 
                                 if (data.brokenNonPlankBlocks % data.activeClass.blocksToPlanks() == 0) {
-                                    player.giveItemStack(new ItemStack(DtmItems.MULTI_BLOCK));
+                                    player.addItem(new ItemStack(DtmItems.MULTI_BLOCK));
                                 }
                             }
                         }
@@ -267,33 +285,33 @@ public abstract class BaseGameLogic {
         return EventResult.PASS;
     }
 
-    protected ActionResult onUseItem(ServerPlayerEntity player, Hand hand) {
+    protected InteractionResult onUseItem(ServerPlayer player, InteractionHand hand) {
         PlayerData playerData = this.participants.get(PlayerRef.of(player));
 
-        ItemStack stack = player.getStackInHand(hand);
+        ItemStack stack = player.getItemInHand(hand);
 
         if (playerData != null && !stack.isEmpty() && stack.getItem() == DtmItems.CLASS_SELECTOR) {
             ClassSelectorUI.openSelector(player, this);
-            return ActionResult.SUCCESS_SERVER;
+            return InteractionResult.SUCCESS_SERVER;
         }
 
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
-    protected ActionResult onUseBlock(ServerPlayerEntity player, Hand hand, BlockHitResult hitResult) {
+    protected InteractionResult onUseBlock(ServerPlayer player, InteractionHand hand, BlockHitResult hitResult) {
         if (this.gameMap.isTater(hitResult.getBlockPos())) {
-            player.getEntityWorld().spawnParticles(ParticleTypes.HEART,
+            player.level().sendParticles(ParticleTypes.HEART,
                     hitResult.getBlockPos().getX() + 0.5d, hitResult.getBlockPos().getY() + 0.5d, hitResult.getBlockPos().getZ() + 0.5d,
                     5, 0.5d, 0.5d, 0.5d, 0.1d);
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.LUCK, 99999, 0, true, false));
+            player.addEffect(new MobEffectInstance(MobEffects.LUCK, 99999, 0, true, false));
         }
 
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
     private volatile boolean skipPacket = false;
 
-    protected EventResult onServerPacket(ServerPlayerEntity player, Packet<?> packet) {
+    protected EventResult onServerPacket(ServerPlayer player, Packet<?> packet) {
         if (skipPacket) {
             return EventResult.PASS;
         }
@@ -305,7 +323,7 @@ public abstract class BaseGameLogic {
         } else {
             if (x != null) {
                 skipPacket = true;
-                player.networkHandler.sendPacket(x);
+                player.connection.send(x);
                 skipPacket = false;
             }
             return EventResult.DENY;
@@ -313,13 +331,13 @@ public abstract class BaseGameLogic {
     }
 
     @SuppressWarnings("unchecked")
-    protected Packet<ClientPlayPacketListener> transformPacket(ServerPlayerEntity player, Packet<?> packet) {
-        if (packet instanceof BundleS2CPacket bundleS2CPacket) {
-            var list = new ArrayList<Packet<? super ClientPlayPacketListener>>();
+    protected Packet<ClientGamePacketListener> transformPacket(ServerPlayer player, Packet<?> packet) {
+        if (packet instanceof ClientboundBundlePacket bundleS2CPacket) {
+            var list = new ArrayList<Packet<? super ClientGamePacketListener>>();
 
             boolean needChanging = false;
 
-            for (var x : bundleS2CPacket.getPackets()) {
+            for (var x : bundleS2CPacket.subPackets()) {
                 var y = transformPacket(player, x);
 
                 if (y != null) {
@@ -331,12 +349,12 @@ public abstract class BaseGameLogic {
                 }
             }
 
-            return needChanging ? new BundleS2CPacket(list) : bundleS2CPacket;
-        } else if (packet instanceof EntityEquipmentUpdateS2CPacket equipmentUpdate) {
+            return needChanging ? new ClientboundBundlePacket(list) : bundleS2CPacket;
+        } else if (packet instanceof ClientboundSetEquipmentPacket equipmentUpdate) {
             var list = new ArrayList<Pair<EquipmentSlot, ItemStack>>();
             boolean cancel = false;
 
-            for (var pair : equipmentUpdate.getEquipmentList()) {
+            for (var pair : equipmentUpdate.getSlots()) {
                 if (pair.getSecond().getItem() == DtmItems.MAP) {
                     cancel = true;
                     list.add(new Pair<>(pair.getFirst(), ItemStack.EMPTY));
@@ -346,31 +364,31 @@ public abstract class BaseGameLogic {
             }
 
             if (cancel) {
-                return new EntityEquipmentUpdateS2CPacket(equipmentUpdate.getEntityId(), list);
+                return new ClientboundSetEquipmentPacket(equipmentUpdate.getEntity(), list);
             }
-        } else if (packet instanceof EntityTrackerUpdateS2CPacket trackerUpdateS2CPacket && PolymerEntityUtils.getEntityContext(packet) instanceof ServerPlayerEntity target) {
+        } else if (packet instanceof ClientboundSetEntityDataPacket trackerUpdateS2CPacket && PolymerEntityUtils.getEntityContext(packet) instanceof ServerPlayer target) {
             var data = this.participants.get(PlayerRef.of(player));
             var data2 = this.participants.get(PlayerRef.of(target));
             if (data != null && data2 != null && data.teamData.team != data2.teamData.team) {
-                var list = new ArrayList<DataTracker.SerializedEntry<?>>(trackerUpdateS2CPacket.trackedValues().size());
+                var list = new ArrayList<SynchedEntityData.DataValue<?>>(trackerUpdateS2CPacket.packedItems().size());
 
                 var modified = false;
-                for (var entry : trackerUpdateS2CPacket.trackedValues()) {
-                    if (entry.id() == LivingEntityAccessor.getHEALTH().id()) {
+                for (var entry : trackerUpdateS2CPacket.packedItems()) {
+                    if (entry.id() == LivingEntityAccessor.getDataHealthId().id()) {
                         modified = true;
                     } else {
                         list.add(entry);
                     }
                 }
                 //noinspection ConstantValue
-                return modified ? PolymerEntityUtils.setEntityContext(new EntityTrackerUpdateS2CPacket(trackerUpdateS2CPacket.id(), list), target) : (Packet<ClientPlayPacketListener>)  packet;
+                return modified ? PolymerEntityUtils.setEntityContext(new ClientboundSetEntityDataPacket(trackerUpdateS2CPacket.id(), list), target) : (Packet<ClientGamePacketListener>)  packet;
             }
         }
-        return (Packet<ClientPlayPacketListener>) packet;
+        return (Packet<ClientGamePacketListener>) packet;
     }
 
     protected void onOpen() {
-        ServerWorld world = this.gameMap.world;
+        ServerLevel world = this.gameMap.world;
         for (PlayerRef ref : this.participants.keySet()) {
             ref.ifOnline(world, this::spawnParticipant);
         }
@@ -378,7 +396,7 @@ public abstract class BaseGameLogic {
 
     protected void onClose(GameCloseReason reason) {
         this.globalSidebar.hide();
-        for (ServerPlayerEntity player : this.gameSpace.getPlayers()) {
+        for (ServerPlayer player : this.gameSpace.getPlayers()) {
             PlayerData data = this.participants.get(PlayerRef.of(player));
             if (data != null) {
                 data.sidebar.removePlayer(player);
@@ -398,7 +416,7 @@ public abstract class BaseGameLogic {
 
     protected JoinOfferResult handleOffer(JoinOffer joinOffer) {
         if (joinOffer.intent() == JoinIntent.PLAY && !this.config.allowJoiningInGame()) {
-            return joinOffer.reject(Text.translatable("text.destroy_the_monument.cant_join_while_active"));
+            return joinOffer.reject(Component.translatable("text.destroy_the_monument.cant_join_while_active"));
         }
 
         return joinOffer.pass();
@@ -408,7 +426,7 @@ public abstract class BaseGameLogic {
         return offer.teleport(this.gameMap.world, this.gameMap.getRandomSpawnPosAsVec3d());
     }
 
-    protected void addPlayer(ServerPlayerEntity player) {
+    protected void addPlayer(ServerPlayer player) {
         if (this.gameSpace.getPlayers().spectators().contains(player)) {
             this.globalSidebar.addPlayer(player);
             this.spawnSpectator(player);
@@ -431,7 +449,7 @@ public abstract class BaseGameLogic {
         }
     }
 
-    protected void removePlayer(ServerPlayerEntity player) {
+    protected void removePlayer(ServerPlayer player) {
         PlayerData dtmPlayer = this.participants.remove(PlayerRef.of(player));
         if (dtmPlayer != null) {
             this.teams.removePlayer(player);
@@ -444,14 +462,14 @@ public abstract class BaseGameLogic {
         }
     }
 
-    protected EventResult onPlayerDamage(ServerPlayerEntity player, DamageSource source, float amount) {
+    protected EventResult onPlayerDamage(ServerPlayer player, DamageSource source, float amount) {
         PlayerData dtmPlayer = this.participants.get(PlayerRef.of(player));
 
         if (dtmPlayer == null || this.deadPlayers.containsKey(PlayerRef.of(player))) {
             return EventResult.DENY;
         }
 
-        if (source.getAttacker() instanceof ServerPlayerEntity attacker) {
+        if (source.getEntity() instanceof ServerPlayer attacker) {
             var attackerData = this.participants.get(PlayerRef.of(attacker));
             if (attackerData == null || attacker == player) {
                 return EventResult.ALLOW;
@@ -461,7 +479,7 @@ public abstract class BaseGameLogic {
                 return EventResult.DENY;
             }
 
-            dtmPlayer.lastAttackTime = player.getEntityWorld().getTime();
+            dtmPlayer.lastAttackTime = player.level().getGameTime();
             dtmPlayer.lastAttacker = attacker;
             this.statistics.forPlayer(attacker).increment(StatisticKeys.DAMAGE_DEALT, amount);
             this.statistics.forPlayer(player).increment(StatisticKeys.DAMAGE_TAKEN, amount);
@@ -470,15 +488,15 @@ public abstract class BaseGameLogic {
         return EventResult.PASS;
     }
 
-    protected EventResult onPlayerDeath(ServerPlayerEntity player, DamageSource source) {
+    protected EventResult onPlayerDeath(ServerPlayer player, DamageSource source) {
         PlayerData dtmPlayer = this.participants.get(PlayerRef.of(player));
         if (dtmPlayer != null) {
-            Text deathMes = source.getDeathMessage(player);
+            Component deathMes = source.getLocalizedDeathMessage(player);
 
-            Text text = FormattingUtil.format(FormattingUtil.DEATH_PREFIX, FormattingUtil.DEATH_STYLE, deathMes.copy());
+            Component text = FormattingUtil.format(FormattingUtil.DEATH_PREFIX, FormattingUtil.DEATH_STYLE, deathMes.copy());
             this.gameSpace.getPlayers().sendMessage(text);
 
-            if (player.getEntityWorld().getTime() - dtmPlayer.lastAttackTime <= 20 * 10 && dtmPlayer.lastAttacker != null) {
+            if (player.level().getGameTime() - dtmPlayer.lastAttackTime <= 20 * 10 && dtmPlayer.lastAttacker != null) {
                 PlayerData attacker = this.participants.get(PlayerRef.of(dtmPlayer.lastAttacker));
                 attacker.kills += 1;
                 attacker.addToTimers(60);
@@ -490,7 +508,7 @@ public abstract class BaseGameLogic {
             dtmPlayer.deaths += 1;
 
             this.statistics.forPlayer(player).increment(StatisticKeys.DEATHS, 1);
-            this.gameMap.world.sendEntityStatus(player, EntityStatuses.ADD_DEATH_PARTICLES);
+            this.gameMap.world.broadcastEntityEvent(player, EntityEvent.POOF);
 
             this.startRespawningPlayerSequence(player);
         } else {
@@ -499,19 +517,19 @@ public abstract class BaseGameLogic {
         return EventResult.DENY;
     }
 
-    protected void startRespawningPlayerSequence(ServerPlayerEntity player) {
+    protected void startRespawningPlayerSequence(ServerPlayer player) {
         if (this.config.tickRespawnTime() > 0) {
             this.deadPlayers.put(PlayerRef.of(player), this.config.tickRespawnTime());
-            player.teleport(this.gameMap.world, player.getX(), player.getY() + 2000, player.getZ(), Set.of(), 0, 0, false);
-            this.spawnLogic.resetPlayer(player, GameMode.ADVENTURE);
-            player.networkHandler.sendPacket(new GameStateChangeS2CPacket(new GameStateChangeS2CPacket.Reason(3), 3));
-            PlayerAbilities abilities = new PlayerAbilities();
-            abilities.allowFlying = false;
-            player.networkHandler.sendPacket(new PlayerAbilitiesS2CPacket(abilities));
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.BLINDNESS, 120, 1, true, false));
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOW_FALLING, 120, 10, true, false));
+            player.teleportTo(this.gameMap.world, player.getX(), player.getY() + 2000, player.getZ(), Set.of(), 0, 0, false);
+            this.spawnLogic.resetPlayer(player, GameType.ADVENTURE);
+            player.connection.send(new ClientboundGameEventPacket(new ClientboundGameEventPacket.Type(3), 3));
+            Abilities abilities = new Abilities();
+            abilities.mayfly = false;
+            player.connection.send(new ClientboundPlayerAbilitiesPacket(abilities));
+            player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 120, 1, true, false));
+            player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 120, 10, true, false));
             for (int x = 0; x < 9; x++) {
-                player.getInventory().setStack(x, new ItemStack(DtmItems.CLASS_SELECTOR));
+                player.getInventory().setItem(x, new ItemStack(DtmItems.CLASS_SELECTOR));
             }
         } else {
             this.spawnParticipant(player);
@@ -522,17 +540,17 @@ public abstract class BaseGameLogic {
         for (PlayerRef ref : this.deadPlayers.keySet()) {
             int ticksLeft = this.deadPlayers.getInt(ref);
             ticksLeft--;
-            ServerPlayerEntity player = ref.getEntity(this.gameMap.world);
+            ServerPlayer player = ref.getEntity(this.gameMap.world);
 
             if (player != null) {
                 if (ticksLeft <= 0) {
                     this.deadPlayers.removeInt(ref);
-                    player.networkHandler.sendPacket(new TitleS2CPacket(Text.empty()));
+                    player.connection.send(new ClientboundSetTitleTextPacket(Component.empty()));
                     this.spawnParticipant(player);
                 } else {
                     if ((ticksLeft + 1) % 20 == 0) {
-                        player.networkHandler.sendPacket(new TitleFadeS2CPacket(0, 90, 0));
-                        player.networkHandler.sendPacket(new TitleS2CPacket(DtmUtil.getText("message", "respawn_time", ticksLeft / 20 + 1).formatted(Formatting.GOLD)));
+                        player.connection.send(new ClientboundSetTitlesAnimationPacket(0, 90, 0));
+                        player.connection.send(new ClientboundSetTitleTextPacket(DtmUtil.getText("message", "respawn_time", ticksLeft / 20 + 1).withStyle(ChatFormatting.GOLD)));
                     }
                     this.deadPlayers.replace(ref, ticksLeft);
                 }
@@ -542,75 +560,75 @@ public abstract class BaseGameLogic {
         }
     }
 
-    public void spawnParticipant(ServerPlayerEntity player) {
-        player.closeHandledScreen();
+    public void spawnParticipant(ServerPlayer player) {
+        player.closeContainer();
         PlayerData playerData = this.participants.get(PlayerRef.of(player));
         if (playerData != null && playerData.teamData.aliveMonuments.size() > 0) {
             playerData.activeClass = playerData.selectedClass;
-            this.spawnLogic.resetPlayer(player, GameMode.SURVIVAL);
+            this.spawnLogic.resetPlayer(player, GameType.SURVIVAL);
             this.setupPlayerClass(player, playerData);
             player.setHealth(player.getMaxHealth());
         } else {
-            this.spawnLogic.resetPlayer(player, GameMode.SPECTATOR);
+            this.spawnLogic.resetPlayer(player, GameType.SPECTATOR);
         }
         this.spawnLogic.spawnPlayer(player);
     }
 
 
-    public void setupPlayerClass(ServerPlayerEntity player, PlayerData playerData) {
-        player.getInventory().clear();
+    public void setupPlayerClass(ServerPlayer player, PlayerData playerData) {
+        player.getInventory().clearContent();
         ((DtmResetable) player.getAttributes()).dtm$reset();
         playerData.activeClass.setupPlayer(player, playerData.teamData);
         this.mapRenderer.updateMap(player, playerData);
 
         playerData.resetTimers();
 
-        player.getInventory().setStack(8, new ItemStack(DtmItems.CLASS_SELECTOR));
+        player.getInventory().setItem(8, new ItemStack(DtmItems.CLASS_SELECTOR));
     }
 
 
-    protected void spawnSpectator(ServerPlayerEntity player) {
-        this.spawnLogic.resetPlayer(player, GameMode.SPECTATOR);
+    protected void spawnSpectator(ServerPlayer player) {
+        this.spawnLogic.resetPlayer(player, GameType.SPECTATOR);
         this.spawnLogic.spawnPlayer(player);
     }
 
-    protected EventResult onPlayerPlaceBlock(ServerPlayerEntity player, ServerWorld world, BlockPos blockPos, BlockState state, ItemUsageContext itemUsageContext) {
-        if (this.gameMap.isUnbreakable(blockPos) || !this.gameMap.mapBounds.contains(blockPos) || itemUsageContext.getStack().getItem() == Items.BEACON) {
+    protected EventResult onPlayerPlaceBlock(ServerPlayer player, ServerLevel world, BlockPos blockPos, BlockState state, UseOnContext itemUsageContext) {
+        if (this.gameMap.isUnbreakable(blockPos) || !this.gameMap.mapBounds.contains(blockPos) || itemUsageContext.getItemInHand().getItem() == Items.BEACON) {
             // Fixes desync
             int slot;
-            if (itemUsageContext.getHand() == Hand.MAIN_HAND) {
+            if (itemUsageContext.getHand() == InteractionHand.MAIN_HAND) {
                 slot = player.getInventory().getSelectedSlot();
             } else {
                 slot = 40; // offhand
             }
 
-            player.networkHandler.sendPacket(new ScreenHandlerSlotUpdateS2CPacket(-2, 0, slot, itemUsageContext.getStack()));
+            player.connection.send(new ClientboundContainerSetSlotPacket(-2, 0, slot, itemUsageContext.getItemInHand()));
 
             return EventResult.DENY;
         }
 
-        if (itemUsageContext.getStack().getItem() == Items.TNT) {
-            itemUsageContext.getStack().decrement(1);
-            TntEntity tnt = new TntEntity(player.getEntityWorld(), blockPos.getX() + 0.5, blockPos.getY() + 0.5, blockPos.getZ() + 0.5, player);
-            player.getEntityWorld().spawnEntity(tnt);
+        if (itemUsageContext.getItemInHand().getItem() == Items.TNT) {
+            itemUsageContext.getItemInHand().shrink(1);
+            PrimedTnt tnt = new PrimedTnt(player.level(), blockPos.getX() + 0.5, blockPos.getY() + 0.5, blockPos.getZ() + 0.5, player);
+            player.level().addFreshEntity(tnt);
             return EventResult.DENY;
         }
 
         return EventResult.PASS;
     }
 
-    protected EventResult onPlayerBreakBlock(ServerPlayerEntity player, ServerWorld world, BlockPos blockPos) {
+    protected EventResult onPlayerBreakBlock(ServerPlayer player, ServerLevel world, BlockPos blockPos) {
         if (this.gameMap.isUnbreakable(blockPos)) {
             return EventResult.DENY;
         } else if (this.gameMap.isTater(blockPos)) {
-            Entity entity = new LightningEntity(EntityType.LIGHTNING_BOLT, player.getEntityWorld());
-            entity.updatePosition(player.getX(), player.getY(), player.getZ());
-            player.getEntityWorld().spawnEntity(entity);
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.WITHER, 6000, 2));
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.HUNGER, 6000, 2));
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.BLINDNESS, 6000, 2));
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 6000, 2));
-            player.getInventory().clear();
+            Entity entity = new LightningBolt(EntityType.LIGHTNING_BOLT, player.level());
+            entity.absSnapTo(player.getX(), player.getY(), player.getZ());
+            player.level().addFreshEntity(entity);
+            player.addEffect(new MobEffectInstance(MobEffects.WITHER, 6000, 2));
+            player.addEffect(new MobEffectInstance(MobEffects.HUNGER, 6000, 2));
+            player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 6000, 2));
+            player.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 6000, 2));
+            player.getInventory().clearContent();
         }
 
         PlayerData playerData = this.participants.get(PlayerRef.of(player));
@@ -618,19 +636,19 @@ public abstract class BaseGameLogic {
         if (playerData == null) {
             return EventResult.PASS;
         }
-        var state = player.getEntityWorld().getBlockState(blockPos);
+        var state = player.level().getBlockState(blockPos);
 
-        if (state.isIn(DTM.BUILDING_BLOCKS)) {
-            player.giveItemStack(new ItemStack(DtmItems.MULTI_BLOCK));
+        if (state.is(DTM.BUILDING_BLOCKS)) {
+            player.addItem(new ItemStack(DtmItems.MULTI_BLOCK));
             playerData.brokenPlankBlocks += 1;
             return EventResult.ALLOW;
         }
 
-        if (state.calcBlockBreakingDelta(player, world, blockPos) < 1) {
+        if (state.getDestroyProgress(player, world, blockPos) < 1) {
             playerData.brokenNonPlankBlocks += 1;
 
             if (playerData.brokenNonPlankBlocks % playerData.activeClass.blocksToPlanks() == 0) {
-                player.giveItemStack(new ItemStack(DtmItems.MULTI_BLOCK));
+                player.addItem(new ItemStack(DtmItems.MULTI_BLOCK));
             }
         }
 
@@ -644,13 +662,13 @@ public abstract class BaseGameLogic {
 
         for (var monument : this.gameMap.monuments) {
             if (monument.isAlive()) {
-                int color = monument.teamData.getConfig().colors().dyeColor().getRgb();
+                int color = monument.teamData.getConfig().colors().dyeColor().getValue();
 
                 float blue = ((float) color % 256) / 256;
                 float green = ((float) (color / 256) % 256) / 256;
                 float red = ((float) color / 65536) / 256;
 
-                this.gameSpace.getPlayers().sendPacket(new ParticleS2CPacket(new DustParticleEffect(ColorHelper.fromFloats(0, red, green, blue), 0.8f), false, false, monument.pos.getX() + 0.5d, monument.pos.getY() + 0.5d, monument.pos.getZ() + 0.5d, 0.2f, 0.2f, 0.2f, 0.01f, 5));
+                this.gameSpace.getPlayers().sendPacket(new ClientboundLevelParticlesPacket(new DustParticleOptions(ARGB.colorFromFloat(0, red, green, blue), 0.8f), false, false, monument.pos.getX() + 0.5d, monument.pos.getY() + 0.5d, monument.pos.getZ() + 0.5d, 0.2f, 0.2f, 0.2f, 0.01f, 5));
             }
         }
 
@@ -679,7 +697,7 @@ public abstract class BaseGameLogic {
 
         this.mapRenderer.tick();
 
-        for (ServerPlayerEntity player : this.gameSpace.getPlayers()) {
+        for (ServerPlayer player : this.gameSpace.getPlayers()) {
             PlayerRef ref = PlayerRef.of(player);
             PlayerData dtmPlayer = this.participants.get(ref);
             if (dtmPlayer != null) {
@@ -687,7 +705,7 @@ public abstract class BaseGameLogic {
                 dtmPlayer.activeClass.maybeRestockPlayer(player, dtmPlayer);
             }
 
-            if (!this.gameMap.mapDeathBounds.contains(player.getBlockPos()) && !this.deadPlayers.containsKey(ref)) {
+            if (!this.gameMap.mapDeathBounds.contains(player.blockPosition()) && !this.deadPlayers.containsKey(ref)) {
                 if (player.isSpectator()) {
                     this.spawnLogic.spawnPlayer(player);
                 } else {
@@ -695,7 +713,7 @@ public abstract class BaseGameLogic {
                 }
             }
 
-            if (this.tickTime % 4 == 0 && (player.getMainHandStack().getItem() == DtmItems.MAP || player.getOffHandStack().getItem() == DtmItems.MAP)) {
+            if (this.tickTime % 4 == 0 && (player.getMainHandItem().getItem() == DtmItems.MAP || player.getOffhandItem().getItem() == DtmItems.MAP)) {
                 this.mapRenderer.updateMap(player, dtmPlayer);
             }
         }
@@ -713,7 +731,7 @@ public abstract class BaseGameLogic {
                 this.isFinished = true;
             } else if (timeLeft <= 6000) {
                 if (this.timerBar == null) {
-                    this.timerBar = new TimerBar(this.gameMap.world.getPlayers(), timeLeft);
+                    this.timerBar = new TimerBar(this.gameMap.world.players(), timeLeft);
                 }
                 this.timerBar.update(timeLeft, this.config.gameTime());
             }
@@ -722,14 +740,14 @@ public abstract class BaseGameLogic {
 
     protected abstract void onTick(TickType type, long tick);
 
-    public abstract void setPlayerSidebar(ServerPlayerEntity player, PlayerData playerData);
+    public abstract void setPlayerSidebar(ServerPlayer player, PlayerData playerData);
 
     protected abstract void buildSidebar();
 
     protected abstract boolean checkIfShouldEnd();
 
     protected TickType getTickType() {
-        long time = this.gameMap.world.getTime();
+        long time = this.gameMap.world.getGameTime();
         if (this.closeTime > 0) {
             if (time >= this.closeTime) {
                 return TickType.GAME_CLOSED;
@@ -742,8 +760,8 @@ public abstract class BaseGameLogic {
         if (this.gameSpace.getPlayers().isEmpty() || this.isFinished) {
             if (!this.setSpectator) {
                 this.setSpectator = true;
-                for (ServerPlayerEntity player : this.gameSpace.getPlayers()) {
-                    player.changeGameMode(GameMode.SPECTATOR);
+                for (ServerPlayer player : this.gameSpace.getPlayers()) {
+                    player.setGameMode(GameType.SPECTATOR);
                 }
                 this.deadPlayers.clear();
             }
@@ -757,7 +775,7 @@ public abstract class BaseGameLogic {
     }
 
     protected void broadcastWin(WinResult result) {
-        Text message;
+        Component message;
         if (result.isWin()) {
             message = FormattingUtil.format(FormattingUtil.STAR_PREFIX,
                     FormattingUtil.WIN_STYLE,
@@ -778,7 +796,7 @@ public abstract class BaseGameLogic {
 
         PlayerSet players = this.gameSpace.getPlayers();
         players.sendMessage(message);
-        players.playSound(SoundEvents.ENTITY_VILLAGER_YES);
+        players.playSound(SoundEvents.VILLAGER_YES);
     }
 
     public abstract WinResult checkWinResult();

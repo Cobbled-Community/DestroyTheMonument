@@ -5,14 +5,14 @@ import eu.pb4.destroythemonument.other.DtmUtil;
 import eu.pb4.sgui.api.elements.AnimatedGuiElement;
 import eu.pb4.sgui.api.elements.GuiElementBuilder;
 import eu.pb4.sgui.api.gui.SimpleGui;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.screen.ScreenHandlerType;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 
 import java.text.DecimalFormat;
 
@@ -22,7 +22,7 @@ public class ClassPreviewUI extends SimpleGui {
     private static final DecimalFormat df = new DecimalFormat("0.00");
 
     public ClassPreviewUI(ClassSelectorUI selectorUI, PlayerClass playerClass) {
-        super(ScreenHandlerType.GENERIC_9X3, selectorUI.getPlayer(), false);
+        super(MenuType.GENERIC_9x3, selectorUI.getPlayer(), false);
         this.selectorUI = selectorUI;
         this.playerClass = playerClass;
         this.setTitle(DtmUtil.getText("ui", "class_preview", DtmUtil.getText("class", playerClass.name())));
@@ -43,36 +43,36 @@ public class ClassPreviewUI extends SimpleGui {
 
             ItemStack stackB = item.itemStack.copy();
             stackB.setCount(item.maxCount);
-            this.setSlot(pos++, new AnimatedGuiElement(new ItemStack[]{ stackA, stackB }, 20,false, (x,y,z) -> {}));
+            this.setSlot(pos++, new AnimatedGuiElement(new ItemStack[]{ stackA, stackB }, 20,false, (x, y, z) -> {}));
         }
 
         pos = 0;
 
         var b = new GuiElementBuilder(Items.NAME_TAG)
-                .setName(DtmUtil.getText("ui", "stats").setStyle(Style.EMPTY.withBold(true).withFormatting(Formatting.GOLD)));
+                .setName(DtmUtil.getText("ui", "stats").setStyle(Style.EMPTY.withBold(true).applyFormat(ChatFormatting.GOLD)));
 
         for (var x : playerClass.attributes().entrySet()) {
             String num;
 
-            if (x.getKey() == EntityAttributes.MOVEMENT_SPEED) {
+            if (x.getKey() == Attributes.MOVEMENT_SPEED) {
                 num = df.format(x.getValue() * 20) + " m/s";
-            } else if (x.getKey() == EntityAttributes.ARMOR || x.getKey() == EntityAttributes.MAX_HEALTH) {
+            } else if (x.getKey() == Attributes.ARMOR || x.getKey() == Attributes.MAX_HEALTH) {
                 num = String.valueOf(x.getValue().intValue());
             } else {
                 num = (int) (x.getValue() * 100) + "%";
             }
 
-            b.addLoreLine(Text.empty()
-                    .append(Text.translatable(x.getKey().value().getTranslationKey())
-                            .append(Text.literal(": ").formatted(Formatting.GRAY))
-                            .append(Text.literal(num))));
+            b.addLoreLine(Component.empty()
+                    .append(Component.translatable(x.getKey().value().getDescriptionId())
+                            .append(Component.literal(": ").withStyle(ChatFormatting.GRAY))
+                            .append(Component.literal(num))));
         }
 
         this.setSlot(this.size - 2, b);
         this.setSlot(this.size - 1, new GuiElementBuilder(Items.BARRIER)
                 .setName(DtmUtil.getText("ui", "return_selector").setStyle(Style.EMPTY.withItalic(false)))
                 .setCallback((x, y, z) -> {
-                    this.player.playSound(SoundEvents.ITEM_BOOK_PAGE_TURN, 0.5f, 1);
+                    this.player.playSound(SoundEvents.BOOK_PAGE_TURN, 0.5f, 1);
                     selectorUI.open();
                 })
         );

@@ -1,43 +1,47 @@
 package eu.pb4.destroythemonument.items;
 
 import eu.pb4.polymer.core.api.item.PolymerItem;
-import net.minecraft.block.*;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.SmallFireballEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.item.Items;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.state.property.Properties;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.world.World;
-import net.minecraft.world.event.GameEvent;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.item.Items;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.CampfireBlock;
+import net.minecraft.world.level.block.CandleBlock;
+import net.minecraft.world.level.block.CandleCakeBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.gameevent.GameEvent;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Unique;
 import xyz.nucleoid.packettweaker.PacketContext;
 
 public class DtmFireballItem extends Item implements PolymerItem {
-    public DtmFireballItem(Settings settings) {
+    public DtmFireballItem(Properties settings) {
         super(settings);
     }
 
     @Override
-    public boolean hasGlint(ItemStack stack) {
+    public boolean isFoil(ItemStack stack) {
         return true;
     }
 
     @Override
-    public Text getName(ItemStack stack) {
-        return Text.literal("Fireball");
+    public Component getName(ItemStack stack) {
+        return Component.literal("Fireball");
     }
 
     @Override
@@ -47,71 +51,71 @@ public class DtmFireballItem extends Item implements PolymerItem {
 
     @Override
     public @Nullable Identifier getPolymerItemModel(ItemStack stack, PacketContext context) {
-        return PolymerItem.super.getPolymerItemModel(Items.FIRE_CHARGE.getDefaultStack(), context);
+        return PolymerItem.super.getPolymerItemModel(Items.FIRE_CHARGE.getDefaultInstance(), context);
     }
 
     @Override
-    public ActionResult useOnEntity(ItemStack stack, PlayerEntity user, LivingEntity entity, Hand hand) {
-        World world = user.getEntityWorld();
+    public InteractionResult interactLivingEntity(ItemStack stack, Player user, LivingEntity entity, InteractionHand hand) {
+        Level world = user.level();
 
         summonFireball(world, user);
-        return super.useOnEntity(stack, user, entity, hand);
+        return super.interactLivingEntity(stack, user, entity, hand);
     }
 
     @Override
-    public ActionResult useOnBlock(ItemUsageContext context) {
-        World world = context.getWorld();
-        BlockPos blockPos = context.getBlockPos();
+    public InteractionResult useOn(UseOnContext context) {
+        Level world = context.getLevel();
+        BlockPos blockPos = context.getClickedPos();
         BlockState blockState = world.getBlockState(blockPos);
         boolean bl = false;
-        if (!CampfireBlock.canBeLit(blockState) && !CandleBlock.canBeLit(blockState) && !CandleCakeBlock.canBeLit(blockState)) {
-            blockPos = blockPos.offset(context.getSide());
-            if (AbstractFireBlock.canPlaceAt(world, blockPos, context.getHorizontalPlayerFacing())) {
+        if (!CampfireBlock.canLight(blockState) && !CandleBlock.canLight(blockState) && !CandleCakeBlock.canLight(blockState)) {
+            blockPos = blockPos.relative(context.getClickedFace());
+            if (BaseFireBlock.canBePlacedAt(world, blockPos, context.getHorizontalDirection())) {
                 this.playUseSound(world, blockPos);
-                world.setBlockState(blockPos, AbstractFireBlock.getState(world, blockPos));
-                world.emitGameEvent(context.getPlayer(), GameEvent.BLOCK_PLACE, blockPos);
+                world.setBlockAndUpdate(blockPos, BaseFireBlock.getState(world, blockPos));
+                world.gameEvent(context.getPlayer(), GameEvent.BLOCK_PLACE, blockPos);
                 bl = true;
             }
         } else {
             this.playUseSound(world, blockPos);
-            world.setBlockState(blockPos, (BlockState)blockState.with(Properties.LIT, true));
-            world.emitGameEvent(context.getPlayer(), GameEvent.BLOCK_CHANGE, blockPos);
+            world.setBlockAndUpdate(blockPos, (BlockState)blockState.setValue(BlockStateProperties.LIT, true));
+            world.gameEvent(context.getPlayer(), GameEvent.BLOCK_CHANGE, blockPos);
             bl = true;
         }
 
         if (bl) {
-            context.getStack().decrement(1);
-            return ActionResult.SUCCESS;
+            context.getItemInHand().shrink(1);
+            return InteractionResult.SUCCESS;
         } else {
-            return ActionResult.FAIL;
+            return InteractionResult.FAIL;
         }
     }
 
-    private void playUseSound(World world, BlockPos pos) {
-        Random random = world.getRandom();
-        world.playSound((PlayerEntity)null, pos, SoundEvents.ITEM_FIRECHARGE_USE, SoundCategory.BLOCKS, 1.0F, (random.nextFloat() - random.nextFloat()) * 0.2F + 1.0F);
+    private void playUseSound(Level world, BlockPos pos) {
+        RandomSource random = world.getRandom();
+        world.playSound((Player)null, pos, SoundEvents.FIRECHARGE_USE, SoundSource.BLOCKS, 1.0F, (random.nextFloat() - random.nextFloat()) * 0.2F + 1.0F);
     }
 
     @Override
-    public ActionResult use(World world, PlayerEntity user, Hand hand) {
+    public InteractionResult use(Level world, Player user, InteractionHand hand) {
         summonFireball(world, user);
         return super.use(world, user, hand);
     }
 
     @Unique
-    public void summonFireball(World world, PlayerEntity user) {
+    public void summonFireball(Level world, Player user) {
 
-        ItemStack stackInHand = user.getStackInHand(user.getActiveHand());
-        Random random = world.getRandom();
+        ItemStack stackInHand = user.getItemInHand(user.getUsedItemHand());
+        RandomSource random = world.getRandom();
 
-        user.getItemCooldownManager().set(stackInHand, 5);
+        user.getCooldowns().addCooldown(stackInHand, 5);
 
-        SmallFireballEntity fireballEntity = new SmallFireballEntity(world, user, new Vec3d(0,0,0));
-        fireballEntity.setPosition(user.getEyePos());
-        fireballEntity.setVelocity(user, user.getPitch(), user.getYaw(), 0.0F, 1f, 0f);
-        world.playSound(null, user.getX(), user.getY(), user.getZ(), SoundEvents.ITEM_FIRECHARGE_USE, SoundCategory.NEUTRAL, 1.0F, (random.nextFloat() - random.nextFloat()) * 0.2F + 1.0F);
-        world.spawnEntity(fireballEntity);
+        SmallFireball fireballEntity = new SmallFireball(world, user, new Vec3(0,0,0));
+        fireballEntity.setPos(user.getEyePosition());
+        fireballEntity.shootFromRotation(user, user.getXRot(), user.getYRot(), 0.0F, 1f, 0f);
+        world.playSound(null, user.getX(), user.getY(), user.getZ(), SoundEvents.FIRECHARGE_USE, SoundSource.NEUTRAL, 1.0F, (random.nextFloat() - random.nextFloat()) * 0.2F + 1.0F);
+        world.addFreshEntity(fireballEntity);
 
-        stackInHand.decrementUnlessCreative(1, user);
+        stackInHand.consume(1, user);
     }
 }
