@@ -13,7 +13,6 @@ import eu.pb4.sgui.api.gui.SimpleGui;
 import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.server.network.ServerPlayerEntity;
 
-import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
@@ -101,10 +100,10 @@ public class ClassSelectorUI extends SimpleGui {
 
             icon.setCallback((x, clickType, z) -> {
                 if (clickType.isLeft) {
-                    this.player.playSoundToPlayer(SoundEvents.UI_BUTTON_CLICK.value(), SoundCategory.MASTER, 0.5f, 1);
+                    this.player.playSound(SoundEvents.UI_BUTTON_CLICK.value(), 0.5f, 1);
                     changeKit(this.game, this.player, this.playerData, kit);
                 } else if (clickType.isRight) {
-                    this.player.playSoundToPlayer(SoundEvents.ITEM_BOOK_PAGE_TURN, SoundCategory.MASTER, 0.5f, 1);
+                    this.player.playSound(SoundEvents.ITEM_BOOK_PAGE_TURN, 0.5f, 1);
                     new ClassPreviewUI(this, kit).open();
                 }
                 this.updateIcons();

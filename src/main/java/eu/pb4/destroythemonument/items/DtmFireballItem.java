@@ -52,7 +52,7 @@ public class DtmFireballItem extends Item implements PolymerItem {
 
     @Override
     public ActionResult useOnEntity(ItemStack stack, PlayerEntity user, LivingEntity entity, Hand hand) {
-        World world = user.getWorld();
+        World world = user.getEntityWorld();
 
         summonFireball(world, user);
         return super.useOnEntity(stack, user, entity, hand);

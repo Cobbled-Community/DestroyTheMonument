@@ -10,9 +10,10 @@ import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.fluid.FluidState;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.storage.ReadView;
+import net.minecraft.storage.WriteView;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.BlockView;
@@ -42,7 +43,7 @@ public class DtmTntEntity extends Entity implements PolymerEntity {
     }
 
     public static void createThrown(LivingEntity player) {
-        var tnt = new DtmTntEntity(DtmEntities.TNT, player.getWorld());
+        var tnt = new DtmTntEntity(DtmEntities.TNT, player.getEntityWorld());
         tnt.causingEntity = player;
         tnt.hitBlock = true;
         tnt.fuse = 40;
@@ -67,11 +68,11 @@ public class DtmTntEntity extends Entity implements PolymerEntity {
         ).multiply(0.8));
         tnt.setPosition(player.getX() + Math.sin(yawRad) * horizontal * 0.3, player.getEyeY() + Math.sin(pitchRad) * 0.3, player.getZ() + -Math.cos(yawRad) * horizontal * 0.3);
 
-        player.getWorld().spawnEntity(tnt);
+        player.getEntityWorld().spawnEntity(tnt);
     }
 
     public static boolean createPlaced(LivingEntity player, BlockPos pos) {
-        var tnt = new DtmTntEntity(DtmEntities.TNT, player.getWorld());
+        var tnt = new DtmTntEntity(DtmEntities.TNT, player.getEntityWorld());
         tnt.setPosition(Vec3d.ofBottomCenter(pos));
         tnt.causingEntity = player;
         tnt.fuse = 20;
@@ -85,7 +86,7 @@ public class DtmTntEntity extends Entity implements PolymerEntity {
             }
         }
 
-        player.getWorld().spawnEntity(tnt);
+        player.getEntityWorld().spawnEntity(tnt);
         return true;
     }
 
@@ -120,12 +121,12 @@ public class DtmTntEntity extends Entity implements PolymerEntity {
     }
 
     @Override
-    protected void readCustomDataFromNbt(NbtCompound nbt) {
+    protected void readCustomData(ReadView view) {
 
     }
 
     @Override
-    protected void writeCustomDataToNbt(NbtCompound nbt) {
+    protected void writeCustomData(WriteView view) {
 
     }
 
@@ -143,10 +144,10 @@ public class DtmTntEntity extends Entity implements PolymerEntity {
             var bb = this.getBoundingBox().stretch(this.getVelocity());
 
             for (var blockPos : BlockPos.iterateOutwards(this.getBlockPos(), 1, 1, 1)) {
-                BlockState blockState = this.getWorld().getBlockState(blockPos);
+                BlockState blockState = this.getEntityWorld().getBlockState(blockPos);
 
                 if (!blockState.isAir()) {
-                    var voxelShape = blockState.getCollisionShape(this.getWorld(), blockPos);
+                    var voxelShape = blockState.getCollisionShape(this.getEntityWorld(), blockPos);
                     if (!voxelShape.isEmpty()) {
                         for (var box : voxelShape.getBoundingBoxes()) {
                             if (box.offset(blockPos).intersects(bb)) {
@@ -177,7 +178,7 @@ public class DtmTntEntity extends Entity implements PolymerEntity {
         }
 
         if (this.age > 1 && this.hitEntity) {
-            for (var entity : this.getWorld().getOtherEntities(this, this.getBoundingBox())) {
+            for (var entity : this.getEntityWorld().getOtherEntities(this, this.getBoundingBox())) {
                 this.onEntityHit(entity);
                 return;
             }
@@ -218,7 +219,7 @@ public class DtmTntEntity extends Entity implements PolymerEntity {
 
     private void explode() {
         this.discard();
-        this.getWorld().createExplosion(this, this.getDamageSources().explosion(this, this.causingEntity), new CustomExplosionBehaviour(this), this.getBoundingBox().getCenter(), 2.8f, false, World.ExplosionSourceType.TNT);
+        this.getEntityWorld().createExplosion(this, this.getDamageSources().explosion(this, this.causingEntity), new CustomExplosionBehaviour(this), this.getBoundingBox().getCenter(), 2.8f, false, World.ExplosionSourceType.TNT);
     }
 
     protected float getEyeHeight(EntityPose pose, EntityDimensions dimensions) {

@@ -21,9 +21,7 @@
       "count": 1,
       "components": {
         "minecraft:enchantments": {
-          "levels": {
-            "knockback": 1
-          }
+          "minecraft:knockback": 1
         }
       }
     }

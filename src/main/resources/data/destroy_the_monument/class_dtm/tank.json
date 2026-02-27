@@ -22,9 +22,7 @@
       "count": 1,
       "components": {
         "minecraft:enchantments": {
-          "levels": {
-            "sharpness": 4
-          }
+          "minecraft:sharpness": 4
         }
       }
     }

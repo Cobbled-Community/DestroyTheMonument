@@ -14,26 +14,20 @@ import eu.pb4.destroythemonument.game.playerclass.ClassRegistry;
 import eu.pb4.destroythemonument.game.map.GameMap;
 import eu.pb4.destroythemonument.other.DtmUtil;
 import eu.pb4.destroythemonument.ui.ClassSelectorUI;
-import eu.pb4.sgui.api.ClickType;
 import eu.pb4.sgui.api.elements.GuiElement;
-import eu.pb4.sgui.api.elements.GuiElementInterface;
-import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.world.GameMode;
-import net.minecraft.world.GameRules;
+import net.minecraft.world.rule.GameRules;
 import xyz.nucleoid.fantasy.RuntimeWorldConfig;
 import xyz.nucleoid.plasmid.api.game.*;
 import xyz.nucleoid.plasmid.api.game.common.GameWaitingLobby;
 import xyz.nucleoid.plasmid.api.game.common.team.GameTeamKey;
 import xyz.nucleoid.plasmid.api.game.common.team.TeamSelectionLobby;
-import xyz.nucleoid.plasmid.api.game.common.ui.WaitingLobbyUiElement;
 import xyz.nucleoid.plasmid.api.game.common.ui.WaitingLobbyUiLayout;
 import xyz.nucleoid.plasmid.api.game.event.GameActivityEvents;
 import xyz.nucleoid.plasmid.api.game.event.GamePlayerEvents;
@@ -93,7 +87,7 @@ public class WaitingLobby {
         RuntimeWorldConfig worldConfig = new RuntimeWorldConfig()
                 .setGenerator(map.asGenerator(context.server()))
                 .setTimeOfDay(config.map().time())
-                .setGameRule(GameRules.DO_DAYLIGHT_CYCLE, false);
+                .setGameRule(GameRules.ADVANCE_TIME, false);
 
         return context.openWithWorld(worldConfig, (game, world) -> {
             map.world = world;

@@ -10,7 +10,6 @@ import eu.pb4.destroythemonument.game.data.TeamData;
 import eu.pb4.destroythemonument.game.map.GameMap;
 import eu.pb4.destroythemonument.other.DtmUtil;
 import eu.pb4.destroythemonument.other.FormattingUtil;
-import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.scoreboard.number.BlankNumberFormat;
@@ -22,6 +21,7 @@ import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.text.TextColor;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.collection.Pool;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
@@ -99,7 +99,7 @@ public class StandardGameLogic extends BaseGameLogic {
 
                 this.gameSpace.getPlayers().sendMessage(text);
                 this.maybeEliminate(monument.teamData);
-                this.gameSpace.getPlayers().sendPacket(new ExplosionS2CPacket( Vec3d.ofCenter(blockPos), Optional.empty(), ParticleTypes.EXPLOSION_EMITTER, SoundEvents.ENTITY_GENERIC_EXPLODE));
+                this.gameSpace.getPlayers().sendPacket(new ExplosionS2CPacket( Vec3d.ofCenter(blockPos), 4.0f ,0, Optional.empty(), ParticleTypes.EXPLOSION_EMITTER, SoundEvents.ENTITY_GENERIC_EXPLODE, Pool.empty()));
                 this.teams.getManager().playersIn(monument.teamData.team).playSound(SoundEvents.ENTITY_WITHER_SPAWN, SoundCategory.MASTER, 0.6f, 1f);
                 playerData.brokenMonuments += 1;
                 playerData.addToTimers(20 * 20);

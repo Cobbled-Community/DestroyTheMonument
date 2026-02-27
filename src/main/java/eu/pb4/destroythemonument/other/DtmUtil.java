@@ -25,7 +25,7 @@ public class DtmUtil {
 
     @Nullable
     public static BaseGameLogic getGame(LivingEntity player) {
-        var game = GameSpaceManager.get().byWorld(player.getWorld());
+        var game = GameSpaceManager.get().byWorld(player.getEntityWorld());
 
         if (game != null) {
             return game.getAttachment(DTM.GAME_LOGIC);
